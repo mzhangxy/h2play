@@ -203,26 +203,70 @@ def login_host2play(email, password, proxy_url=None):
         page.ele('css:input[type="password"]').input(password, clear=True)
         time.sleep(1)
         
-        print("🔍 查找 reCAPTCHA 外层组件...")
-        checkbox_iframe = page.get_frame('@src^https://www.google.com/recaptcha/api2/anchor', timeout=5)
-        
-        if not checkbox_iframe:
-            print("❌ 依然没有加载出 reCAPTCHA。结合上面的抓包报告，请检查网络阻断原因。")
-            page.get_screenshot(path='.', name='error_network_block.png')
-            return
+        # ... (前面的 Xvfb 启动、Xray 代理设置、防指纹伪装代码保持不变) ...
 
-        # ... (后续代码保持不变，若能奇迹般找到 iframe 则继续点击) ...
-        print("✅ 成功找到 reCAPTCHA 组件！尝试点击...")
-        checkbox = checkbox_iframe.ele('#recaptcha-anchor', timeout=5)
-        if checkbox: checkbox.click()
+        print("🔍 查找 reCAPTCHA 外层组件...")
+        checkbox_iframe = page.get_frame('@src^https://www.google.com/recaptcha/api2/anchor', timeout=15)
         
+        if checkbox_iframe:
+            print("✅ 成功找到 reCAPTCHA 组件！等待内部复选框加载...")
+            checkbox = checkbox_iframe.ele('#recaptcha-anchor', timeout=10)
+            
+            if checkbox:
+                checkbox.click()
+                print("🖱️ 点击了 reCAPTCHA 复选框，等待 4 秒观察结果...")
+                time.sleep(4)
+                
+                # 检查是否直接通过 (打勾状态)
+                if checkbox.attr('aria-checked') == 'true':
+                    print("✨ reCAPTCHA 直接验证通过！免去验证码挑战。")
+                else:
+                    print("🎲 触发了验证挑战，正在寻找弹出窗口...")
+                    challenge_iframe = page.get_frame('@src^https://www.google.com/recaptcha/api2/bframe', timeout=10)
+                    if challenge_iframe:
+                        print("🎧 检测到语音/图片挑战，启动语音破解流程...")
+                        solver = RecaptchaAudioSolver(page)
+                        solved = solver.solve(challenge_iframe)
+                        
+                        if not solved:
+                            print("❌ 验证码破解失败。")
+                            page.get_screenshot(path='.', name='error_solver_failed.png')
+                            return
+                    else:
+                        print("⚠️ 未能定位到挑战弹窗 (bframe)。")
+            else:
+                print("❌ 未能找到 #recaptcha-anchor 元素。")
+        else:
+            print("❌ 未能找到 reCAPTCHA iframe。")
+
+        # --- 最终登录提交 ---
+        print("🚀 尝试提交登录...")
+        sign_in_btn = page.ele('text:Sign In', timeout=10)
+        if sign_in_btn:
+            sign_in_btn.click()
+            print("⏳ 等待登录跳转...")
+            time.sleep(6)
+            print(f"📄 当前页面标题: {page.title}")
+            
+            # 如果标题包含 Dashboard 或其他成功关键字，代表成功
+            if "Dashboard" in page.title or "Account" in page.title:
+                print("🎉 恭喜！登录成功。")
+            else:
+                print("📝 登录后页面标题未发生预期变化，请通过截图确认状态。")
+                page.get_screenshot(path='.', name='login_result.png')
+        else:
+            print("❌ 未找到 Sign In 按钮！")
+
     except Exception as e:
-        print(f"\n❌ 执行过程中出现异常: {e}")
+        print(f"\n💥 执行过程中出现异常: {e}")
+        if 'page' in locals() and page:
+            page.get_screenshot(path='.', name='error_final.png')
     finally:
         if 'page' in locals() and page:
             page.quit()
         vdisplay.stop()
         print("Xvfb 虚拟桌面已关闭。")
+        
         pass
 
 
