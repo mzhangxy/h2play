@@ -48,12 +48,12 @@ class RecaptchaAudioSolver:
         self.log_func(f"[Solver] {msg}")
 
     def solve(self, iframe_ele):
-        self.log("🎧 启动音频破解流程...")
+        self.log("🎧 启动过盾流程...")
         try:
             # 尝试定位音频按钮
             audio_btn = iframe_ele.ele('css:#recaptcha-audio-button', timeout=5)
             if not audio_btn:
-                self.log("❌ 未找到音频验证按钮，可能被 Google 屏蔽")
+                self.log("❌ 未找到验证按钮，可能被 Google 屏蔽")
                 return False
             
             audio_btn.click()
@@ -64,18 +64,18 @@ class RecaptchaAudioSolver:
                 src = self.get_audio_source(iframe_ele)
                 if src:
                     break
-                self.log(f"⚠️ 第 {attempt+1} 次获取音频失败，尝试点击刷新...")
+                self.log(f"⚠️ 第 {attempt+1} 次获取TOKEN失败，尝试点击刷新...")
                 reload_btn = iframe_ele.ele('css:#recaptcha-reload-button')
                 if reload_btn:
                     reload_btn.click()
                     time.sleep(random.uniform(4, 6))
             
             if not src:
-                self.log("❌ 最终无法获取音频链接 (IP 可能被暂时封禁音频验证)")
+                self.log("❌ 最终无法获取链接 (IP 可能被暂时封禁验证)")
                 return False
 
             # 下载并识别
-            self.log("📥 正在处理音频数据...")
+            self.log("📥 正在处理数据...")
             r = requests.get(src, timeout=15)
             with open("audio.mp3", 'wb') as f: f.write(r.content)
             
@@ -175,7 +175,7 @@ def login_host2play(email, password, proxy_url):
                 time.sleep(4)
                 
                 if checkbox.attr('aria-checked') != 'true':
-                    print("🎲 触发验证挑战，调用语音破解器...")
+                    print("🎲 触发验证挑战，调用破解器...")
                     challenge_frame = page.get_frame('@src^https://www.google.com/recaptcha/api2/bframe', timeout=10)
                     if challenge_frame:
                         solver = RecaptchaAudioSolver(page)
@@ -195,7 +195,7 @@ def login_host2play(email, password, proxy_url):
                     time.sleep(8)
                     print(f"📄 最终页面标题: {page.title}")
                     
-                    if "Dashboard" in page.title or "Account" in page.title:
+                    if "Dashboard" in page.title or "Panel" in page.title:
                         print("🎉 恭喜！自动登录彻底成功。")
                     else:
                         print("⚠️ 标题未匹配成功关键字，请检查 final_result.png")
