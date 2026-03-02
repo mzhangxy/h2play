@@ -35,8 +35,19 @@ jobs:
 
       - name: Run Login Script
         env:
-          # 将 GitHub Secrets 映射为环境变量，供 Python 脚本中的 os.getenv() 读取
+          # 将 GitHub Secrets 映射为环境变量
           USER_EMAIL: ${{ secrets.USER_EMAIL }}
           USER_PASSWORD: ${{ secrets.USER_PASSWORD }}
         # 假设您的 Python 脚本命名为 login.py，请根据实际文件名修改
-        run: python login.py
+        run: python login.py 
+
+      # ==========================================
+      # 新增步骤：收集并上传所有截图作为排错构件 (Artifact)
+      # ==========================================
+      - name: Upload Error Screenshots
+        uses: actions/upload-artifact@v4
+        if: always() # 极其重要：确保即使上一层的 run 步骤报错失败，此步骤依然会执行
+        with:
+          name: debug-screenshots # 下载时的压缩包名称
+          path: ./*.png # 自动捕获当前目录下产生的所有 .png 结尾的文件
+          retention-days: 5 # 构件保留 5 天后自动清理，节省空间
