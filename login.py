@@ -13,7 +13,7 @@ except ImportError:
     print("请确保已安装 SpeechRecognition 和 pydub 库")
 
 # ==============================================================================
-# 验证码求解器逻辑 (保持不变)
+# 验证码求解器逻辑
 # ==============================================================================
 class RecaptchaAudioSolver:
     """验证破解器 (自动刷新重试)"""
@@ -135,7 +135,7 @@ class RecaptchaAudioSolver:
         except: return None
 
 # ==============================================================================
-# 主登录逻辑 (新增 proxy_url 参数)
+# 主登录逻辑
 # ==============================================================================
 def login_host2play(email, password, proxy_url=None):
     print("启动 Xvfb 虚拟桌面...")
@@ -146,17 +146,14 @@ def login_host2play(email, password, proxy_url=None):
         co = ChromiumOptions()
         co.set_argument('--no-sandbox')
         co.set_argument('--disable-gpu')
-        co.set_argument('--disable-dev-shm-usage') # 新增：防止 Linux 容器下内存不足导致浏览器瞬间崩溃
-        co.set_argument('--window-size=1280,720')  # 新增：配合 Xvfb，强制指定窗口大小，提升渲染稳定性
+        co.set_argument('--disable-dev-shm-usage') 
+        co.set_argument('--window-size=1280,720')  
         
-        # --- 新增代理配置逻辑 ---
         if proxy_url:
             print(f"🔄 检测到代理配置，正在设置代理...")
-            # 格式要求: http://ip:port 或 http://user:pass@ip:port
             co.set_proxy(proxy_url)
         else:
-            print("⚠️ 未配置代理，将使用本地/默认网络运行。")
-        # ------------------------
+            print("⚠️ 未配置代理，将使用本地网络运行。")
         
         page = ChromiumPage(co)
         
@@ -175,7 +172,7 @@ def login_host2play(email, password, proxy_url=None):
         checkbox_iframe = page.get_frame('@src^https://www.google.com/recaptcha/api2/anchor', timeout=15)
         
         if checkbox_iframe:
-            print("已定位到 iframe，等待内部元素加载 (GitHub环境可能较慢)...")
+            print("已定位到 iframe，等待内部元素加载...")
             checkbox = checkbox_iframe.ele('#recaptcha-anchor', timeout=15)
             
             if not checkbox:
@@ -220,9 +217,18 @@ def login_host2play(email, password, proxy_url=None):
         print("登录流程执行完毕！")
         
     except Exception as e:
-        print(f"执行过程中出现异常: {e}")
+        print(f"\n❌ 执行过程中出现异常: {e}")
+        # --- 新增的全局截图逻辑 ---
+        if 'page' in locals() and page:
+            try:
+                print(f"当前所在 URL: {page.url}")
+                print("📸 正在捕获全局异常截图并保存为 error_global.png...")
+                page.get_screenshot(path='.', name='error_global.png')
+            except Exception as screenshot_e:
+                print(f"全局截图保存失败: {screenshot_e}")
+        # ------------------------
     finally:
-        if 'page' in locals():
+        if 'page' in locals() and page:
             page.quit()
         vdisplay.stop()
         print("Xvfb 虚拟桌面已关闭。")
@@ -230,23 +236,17 @@ def login_host2play(email, password, proxy_url=None):
 if __name__ == "__main__":
     USER_EMAIL = os.getenv("USER_EMAIL")
     USER_PASSWORD = os.getenv("USER_PASSWORD")
-    PROXY_URL_ENV = os.getenv("PROXY_URL") # 获取原始的代理环境变量
+    PROXY_URL_ENV = os.getenv("PROXY_URL") 
     
     if not USER_EMAIL or not USER_PASSWORD:
         print("❌ 错误: 未能在环境变量中读取到 USER_EMAIL 或 USER_PASSWORD。")
         sys.exit(1)
         
-    # --- 新增：多代理解析与随机选择逻辑 ---
     selected_proxy = None
     if PROXY_URL_ENV:
-        # 将换行符替换为逗号，然后按逗号分割，并去除首尾空格
         proxy_list = [p.strip() for p in PROXY_URL_ENV.replace('\n', ',').split(',') if p.strip()]
-        
         if proxy_list:
-            # 使用 random.choice 从列表中随机挑选一个代理
             selected_proxy = random.choice(proxy_list)
             print(f"🎲 代理池中共检测到 {len(proxy_list)} 个代理，本次随机抽中的代理是: {selected_proxy}")
-    # ---------------------------------------
             
-    # 将选中的单个代理传入主函数
     login_host2play(USER_EMAIL, USER_PASSWORD, selected_proxy)
