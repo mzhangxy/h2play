@@ -223,7 +223,7 @@ if __name__ == "__main__":
     if not USER_EMAIL or not USER_PASSWORD:
         print("❌ 错误: 未能在环境变量中读取到 USER_EMAIL 或 USER_PASSWORD。")
         sys.exit(1)
-    V2RAY_LOCAL_PROXY = "http://127.0.0.1:10808"
+    V2RAY_LOCAL_PROXY = "http://127.0.0.1:10809"
     
     print(f"⚡ 准备使用 V2ray 本地代理节点: {V2RAY_LOCAL_PROXY}")
             
