@@ -1,9 +1,98 @@
 import os
 import sys
 import time
+import random
+import requests
 from DrissionPage import ChromiumPage, ChromiumOptions
 from xvfbwrapper import Xvfb
 
+try:
+    import speech_recognition as sr
+    from pydub import AudioSegment
+except ImportError:
+    pass
+
+# ==============================================================================
+# 语音验证码破解模块
+# ==============================================================================
+class RecaptchaAudioSolver:
+    def __init__(self, page):
+        self.page = page
+        self.log_func = print
+
+    def log(self, msg):
+        self.log_func(f"[Solver] {msg}")
+
+    def solve(self, iframe_ele):
+        self.log("🎧 启动音频破解流程...")
+        try:
+            # 尝试定位音频按钮
+            audio_btn = iframe_ele.ele('css:#recaptcha-audio-button', timeout=5)
+            if not audio_btn:
+                self.log("❌ 未找到音频验证按钮，可能被 Google 屏蔽")
+                return False
+            
+            audio_btn.click()
+            time.sleep(random.uniform(3, 5))
+            
+            # 循环尝试获取音频源（增加重试次数）
+            for attempt in range(3):
+                src = self.get_audio_source(iframe_ele)
+                if src:
+                    break
+                self.log(f"⚠️ 第 {attempt+1} 次获取音频失败，尝试点击刷新...")
+                reload_btn = iframe_ele.ele('css:#recaptcha-reload-button')
+                if reload_btn:
+                    reload_btn.click()
+                    time.sleep(random.uniform(4, 6))
+            
+            if not src:
+                self.log("❌ 最终无法获取音频链接 (IP 可能被暂时封禁音频验证)")
+                return False
+
+            # 下载并识别
+            self.log("📥 正在处理音频数据...")
+            r = requests.get(src, timeout=15)
+            with open("audio.mp3", 'wb') as f: f.write(r.content)
+            
+            sound = AudioSegment.from_mp3("audio.mp3")
+            sound.export("audio.wav", format="wav")
+            
+            recognizer = sr.Recognizer()
+            with sr.AudioFile("audio.wav") as source:
+                audio_data = recognizer.record(source)
+                key_text = recognizer.recognize_google(audio_data)
+                self.log(f"🗣️ 识别结果: [{key_text}]")
+
+            # 输入结果
+            input_box = iframe_ele.ele('css:#audio-response')
+            if input_box:
+                for char in key_text:
+                    input_box.input(char, clear=False)
+                    time.sleep(random.uniform(0.1, 0.2))
+                
+                time.sleep(1)
+                iframe_ele.ele('css:#recaptcha-verify-button').click()
+                self.log("🚀 提交验证...")
+                time.sleep(3)
+                return True
+        except Exception as e:
+            self.log(f"💥 异常: {e}")
+            return False
+        finally:
+            for f in ["audio.mp3", "audio.wav"]:
+                if os.path.exists(f): os.remove(f)
+
+    def get_audio_source(self, iframe_ele):
+        try:
+            download_link = iframe_ele.ele('css:.rc-audiochallenge-ndownload-link') or \
+                            iframe_ele.ele('xpath://a[contains(@href, ".mp3")]')
+            return download_link.attr('href') if download_link else None
+        except: return None
+
+# ==============================================================================
+# 主流程控制
+# ==============================================================================
 def login_host2play(email, password, proxy_url):
     print("启动 Xvfb 虚拟桌面...")
     vdisplay = Xvfb(width=1280, height=720, colordepth=24)
@@ -16,58 +105,86 @@ def login_host2play(email, password, proxy_url):
         co.set_argument('--no-sandbox')
         co.set_argument('--disable-gpu')
         co.set_argument('--disable-dev-shm-usage')
-        # 深度 Stealth 伪装
         co.set_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36')
         co.set_proxy(proxy_url)
         
         page = ChromiumPage(co)
-        # 移除自动化检测特征
         page.run_js('Object.defineProperty(navigator, "webdriver", {get: () => undefined})')
         
         print(f"🌐 访问目标: https://host2play.gratis/sign-in")
         page.get("https://host2play.gratis/sign-in")
         
         print(f"📄 初始加载页面标题: {page.title}")
-        print("⏳ 正在等待页面真实内容加载 (最长等待 25 秒，以防 Cloudflare 拦截)...")
+        print("⏳ 等待登录表单加载 (最多 25 秒)...")
         
-        # 将邮箱输入框的超时时间拉长到 25 秒
         email_input = page.ele('css:input[type="email"]', timeout=25)
-        
         if not email_input:
-            print(f"❌ 25秒后依然未找到邮箱输入框！当前页面最终标题: {page.title}")
-            print("📸 正在截图保存为 error_no_email_input.png...")
-            page.get_screenshot(path='.', name='error_no_email_input.png')
+            print("❌ 未找到邮箱输入框，截图退出。")
+            page.get_screenshot(path='.', name='error_no_email.png')
             return 
 
-        print("📝 成功定位输入框，开始填写登录信息...")
+        print("📝 成功定位输入框，开始填写并触发防御机制...")
         email_input.input(email)
         
-        # ==========================================
-        # 核心修改：输入密码后直接附带换行符触发回车
-        # ==========================================
-        print("🔑 填写密码并直接模拟按下【回车键】...")
+        # 第一击：回车触发隐藏的验证码并等待页面刷新重建
+        print("🔑 提交密码并敲击回车...")
         page.ele('css:input[type="password"]').input(f"{password}\n")
         
-        print("⏳ 已触发回车提交，等待 10 秒让页面跳转或报错...")
-        time.sleep(10)
+        print("⏳ 触发后台校验，等待 8 秒让页面刷新并加载验证码...")
+        time.sleep(8)
         
-        print(f"📄 回车提交后的页面标题: {page.title}")
-        print("📸 正在截图保存为 result_after_enter.png...")
-        page.get_screenshot(path='.', name='result_after_enter.png')
+        # 第二击：在新刷出来的 DOM 里寻找 reCAPTCHA
+        print("🔍 开始寻找被触发的 reCAPTCHA 组件...")
+        checkbox_frame = page.get_frame('@src^https://www.google.com/recaptcha/api2/anchor', timeout=15)
         
-        if "Dashboard" in page.title or "Account" in page.title:
-            print("🎉 奇迹出现！网站未强制要求验证码，直接登录成功。")
+        if checkbox_frame:
+            checkbox = checkbox_frame.ele('#recaptcha-anchor', timeout=10)
+            if checkbox:
+                checkbox.click()
+                print("🖱️ 已点击复选框，等待响应...")
+                time.sleep(4)
+                
+                if checkbox.attr('aria-checked') != 'true':
+                    print("🎲 触发验证挑战，调用语音破解器...")
+                    challenge_frame = page.get_frame('@src^https://www.google.com/recaptcha/api2/bframe', timeout=10)
+                    if challenge_frame:
+                        solver = RecaptchaAudioSolver(page)
+                        if not solver.solve(challenge_frame):
+                            print("❌ 破解未能通过，保存截图...")
+                            page.get_screenshot(path='.', name='error_solver_fail.png')
+                            return
+                else:
+                    print("✨ 验证秒过！")
+                
+                # 第三击：验证通过后，再次提交登录
+                print("🚀 验证完成，最终点击 Sign In...")
+                sign_in_btn = page.ele('text:Sign In', timeout=10)
+                if sign_in_btn:
+                    sign_in_btn.click()
+                    time.sleep(8)
+                    print(f"📄 最终页面标题: {page.title}")
+                    
+                    if "Dashboard" in page.title or "Account" in page.title:
+                        print("🎉 恭喜！自动登录彻底成功。")
+                    else:
+                        print("⚠️ 标题未匹配成功关键字，请检查 final_result.png")
+                    
+                    page.get_screenshot(path='.', name='final_result.png')
+                else:
+                    print("❌ 找不到最终的 Sign In 按钮")
+            else:
+                print("❌ iframe 中未能找到 checkbox。")
         else:
-            print("⚠️ 登录可能未成功，请前往 Artifacts 查看 result_after_enter.png 截图，确认网站的拦截提示。")
+            print("❌ 依然没有找到 reCAPTCHA，可能是回车后被彻底拦截。")
+            page.get_screenshot(path='.', name='error_no_captcha_after_enter.png')
 
     except Exception as e:
         print(f"\n💥 执行过程中出现异常: {e}")
         if page:
             try:
-                print("📸 正在捕获异常现场截图保存为 error_final.png...")
                 page.get_screenshot(path='.', name='error_final.png')
-            except Exception as screenshot_e:
-                print(f"截图保存失败: {screenshot_e}")
+            except:
+                pass
     finally:
         if page:
             page.quit()
@@ -79,8 +196,6 @@ if __name__ == "__main__":
     password = os.getenv("USER_PASSWORD")
     
     if not email or not password:
-        print("❌ 未获取到账户变量，退出。")
         sys.exit(1)
         
-    # 确保使用的是 Xray 混合端口 10808
     login_host2play(email, password, "http://127.0.0.1:10808")
