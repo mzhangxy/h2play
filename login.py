@@ -147,8 +147,18 @@ def login_host2play(email, password, proxy_url=None):
         co.set_argument('--no-sandbox')
         co.set_argument('--disable-gpu')
         co.set_argument('--disable-dev-shm-usage') 
-        co.set_argument('--window-size=1280,720')  
+        co.set_argument('--window-size=1280,720')
         
+        # ==========================================
+        # 新增：浏览器防指纹 (Stealth) 深度伪装
+        # 将 Linux 无头浏览器伪装成真实的 Windows 桌面浏览器
+        # ==========================================
+        print("🎭 注入浏览器反指纹特征，伪装为真实 Windows 用户...")
+        co.set_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36')
+        co.set_argument('--accept-lang=zh-CN,zh;q=0.9,en;q=0.8')
+        co.set_argument('--disable-blink-features=AutomationControlled') # 极其重要：移除 WebDriver 自动化标记
+        # ==========================================
+
         if proxy_url:
             print(f"🔄 检测到代理配置，正在设置代理...")
             co.set_proxy(proxy_url)
@@ -157,9 +167,9 @@ def login_host2play(email, password, proxy_url=None):
         
         page = ChromiumPage(co)
         
-        # ==========================================
-        # 方案 B: 开启网络监听，专项抓取 Google 流量
-        # ==========================================
+        # 移除底层的 WebDriver 变量，防止被 Google 探针发现
+        page.run_js('Object.defineProperty(navigator, "webdriver", {get: () => undefined})')
+        
         print("🕵️ 开启底层网络监听 (专门捕获 Google reCAPTCHA 流量)...")
         page.listen.start('google.com/recaptcha')
         
