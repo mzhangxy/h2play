@@ -88,8 +88,12 @@ class RecaptchaAudioSolver:
         except: return None
 
 def login_host2play(email, password, proxy_url):
+    print("启动 Xvfb 虚拟桌面...")
     vdisplay = Xvfb(width=1280, height=720, colordepth=24)
     vdisplay.start()
+    
+    page = None # 初始化 page 变量，防止 finally 中报错
+    
     try:
         co = ChromiumOptions()
         co.set_argument('--no-sandbox')
@@ -105,14 +109,24 @@ def login_host2play(email, password, proxy_url):
         
         print(f"🌐 访问目标: https://host2play.gratis/sign-in")
         page.get("https://host2play.gratis/sign-in")
-        time.sleep(5)
+        
+        # ==========================================
+        # 新增：智能检测与 Cloudflare 5秒盾应对逻辑
+        # ==========================================
+        print(f"📄 初始加载页面标题: {page.title}")
+        print("⏳ 正在等待页面真实内容加载 (最长等待 25 秒，以防 Cloudflare 拦截)...")
+        
+        # 将邮箱输入框的超时时间拉长到 25 秒
+        email_input = page.ele('css:input[type="email"]', timeout=25)
+        
+        if not email_input:
+            print(f"❌ 25秒后依然未找到邮箱输入框！当前页面最终标题: {page.title}")
+            print("📸 正在截图保存为 error_no_email_input.png...")
+            page.get_screenshot(path='.', name='error_no_email_input.png')
+            return # 找不到就不往下执行了
 
-        # 模拟人类行为：轻微滚动
-        page.run_js('window.scrollBy(0, 200)')
-        time.sleep(1)
-
-        print("📝 填写登录信息...")
-        page.ele('css:input[type="email"]').input(email)
+        print("📝 成功定位输入框，开始填写登录信息...")
+        email_input.input(email)
         page.ele('css:input[type="password"]').input(password)
         time.sleep(random.uniform(1, 2))
 
@@ -122,27 +136,57 @@ def login_host2play(email, password, proxy_url):
             checkbox = checkbox_frame.ele('#recaptcha-anchor', timeout=10)
             if checkbox:
                 checkbox.click()
+                print("🖱️ 已点击复选框，等待响应...")
                 time.sleep(4)
                 
                 if checkbox.attr('aria-checked') != 'true':
+                    print("🎲 触发验证挑战，定位挑战弹窗...")
                     challenge_frame = page.get_frame('@src^https://www.google.com/recaptcha/api2/bframe', timeout=10)
                     if challenge_frame:
                         solver = RecaptchaAudioSolver(page)
                         if not solver.solve(challenge_frame):
+                            print("❌ 破解未能通过。")
                             page.get_screenshot(path='.', name='solver_fail.png')
                             return
+                else:
+                    print("✨ 验证秒过！")
                 
                 print("🚀 点击 Sign In...")
-                page.ele('text:Sign In').click()
-                time.sleep(6)
-                print(f"📄 最终标题: {page.title}")
-                page.get_screenshot(path='.', name='final_result.png')
+                sign_in_btn = page.ele('text:Sign In', timeout=10)
+                if sign_in_btn:
+                    sign_in_btn.click()
+                    time.sleep(6)
+                    print(f"📄 最终页面标题: {page.title}")
+                    page.get_screenshot(path='.', name='final_result.png')
+                else:
+                    print("❌ 找不到 Sign In 按钮")
+        else:
+            print("❌ 未能找到 reCAPTCHA iframe。")
+
+    except Exception as e:
+        print(f"\n💥 执行过程中出现异常: {e}")
+        # ==========================================
+        # 修复：全局异常截图，确保崩溃时留下证据
+        # ==========================================
+        if page:
+            try:
+                print("📸 正在捕获异常现场截图保存为 error_final.png...")
+                page.get_screenshot(path='.', name='error_final.png')
+            except Exception as screenshot_e:
+                print(f"截图保存失败: {screenshot_e}")
     finally:
-        page.quit()
+        if page:
+            page.quit()
         vdisplay.stop()
+        print("Xvfb 虚拟桌面已关闭。")
 
 if __name__ == "__main__":
     email = os.getenv("USER_EMAIL")
     password = os.getenv("USER_PASSWORD")
-    # 确保使用的是 Xray 混合端口
+    
+    if not email or not password:
+        print("❌ 未获取到账户变量，退出。")
+        sys.exit(1)
+        
+    # 确保使用的是 Xray 混合端口 10808
     login_host2play(email, password, "http://127.0.0.1:10808")
