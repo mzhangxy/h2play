@@ -43,8 +43,8 @@ jobs:
           echo "⏳ 等待 V2ray 核心启动 (5秒)..."
           sleep 5
           
-          echo "🌐 测试 V2ray 本地 HTTP 代理 (127.0.0.1:10809) 连通性..."
-          curl -x http://127.0.0.1:10809 -I -s https://www.google.com/generate_204 || echo "⚠️ 代理测试未通过，请检查节点配置！"
+          echo "🌐 测试 V2ray 本地 HTTP 代理 (127.0.0.1:10808) 连通性..."
+          curl -x http://127.0.0.1:10808 -I -s https://www.google.com/generate_204 || echo "⚠️ 代理测试未通过，请检查节点配置！"
 
       - name: Install Python Dependencies
         run: |
