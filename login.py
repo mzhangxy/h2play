@@ -160,35 +160,57 @@ def login_host2play(email, password):
         page.ele('css:input[type="password"]').input(password)
         time.sleep(1)
         
+        # ... 上面填写邮箱密码的代码保持不变 ...
+        
         print("定位 reCAPTCHA 复选框...")
-        checkbox_iframe = page.get_frame('@src^https://www.google.com/recaptcha/api2/anchor')
+        # 找 iframe 也稍微多给一点时间
+        checkbox_iframe = page.get_frame('@src^https://www.google.com/recaptcha/api2/anchor', timeout=15)
         
         if checkbox_iframe:
-            checkbox = checkbox_iframe.ele('.recaptcha-checkbox')
+            print("已定位到 iframe，等待内部元素加载 (GitHub环境可能较慢)...")
+            # 1. 延长超时时间到 15 秒
+            # 2. 改用 #recaptcha-anchor 这个更稳定、原生的 ID 定位器
+            checkbox = checkbox_iframe.ele('#recaptcha-anchor', timeout=15)
+            
+            if not checkbox:
+                print("❌ iframe 内元素加载失败。正在截图保存为 error_recaptcha.png...")
+                page.get_screenshot(path='.', name='error_recaptcha.png')
+                return
+                
             checkbox.click()
             print("点击了 reCAPTCHA 复选框，等待验证挑战弹出...")
-            time.sleep(3)
+            time.sleep(4) # 多给一点点时间让网络请求飞一会儿
             
-            if checkbox_iframe.ele('.recaptcha-checkbox').attr('aria-checked') == 'true':
+            # 同样改用更准确的属性判断
+            if checkbox.attr('aria-checked') == 'true':
                 print("reCAPTCHA 直接验证通过！免去验证码挑战。")
             else:
-                challenge_iframe = page.get_frame('@src^https://www.google.com/recaptcha/api2/bframe')
+                challenge_iframe = page.get_frame('@src^https://www.google.com/recaptcha/api2/bframe', timeout=10)
                 if challenge_iframe:
                     print("检测到验证码挑战，启动语音破解...")
                     solver = RecaptchaAudioSolver(page)
                     solved = solver.solve(challenge_iframe)
                     
                     if not solved:
-                        print("验证码破解失败，脚本终止。")
+                        print("验证码破解失败，正在截图保存为 error_solver.png...")
+                        page.get_screenshot(path='.', name='error_solver.png')
                         return
                 else:
-                    print("未检测到挑战弹窗 iframe，可能存在异常。")
+                    print("未检测到挑战弹窗 iframe，可能存在异常。正在截图...")
+                    page.get_screenshot(path='.', name='error_challenge.png')
         else:
-            print("未找到 reCAPTCHA 元素，可能页面加载异常或无需验证。")
+            print("未找到 reCAPTCHA iframe，可能页面加载异常。正在截图...")
+            page.get_screenshot(path='.', name='error_no_iframe.png')
 
+        # 3. 点击登录按钮
         time.sleep(2) 
         print("点击 Sign In 按钮...")
-        page.ele('text:Sign In').click()
+        # 为了防止未加载完全，这里也加个等待
+        sign_in_btn = page.ele('text:Sign In', timeout=10)
+        if sign_in_btn:
+            sign_in_btn.click()
+        else:
+            print("未找到 Sign In 按钮！")
         
         time.sleep(5)
         print(f"当前页面标题: {page.title}")
