@@ -23,28 +23,36 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y xvfb ffmpeg unzip
 
-      # ==========================================
-      # 新增：下载并后台运行 V2ray 核心
-      # ==========================================
-      - name: Install and Run V2ray
+      - name: Install and Run Xray
         env:
           V2RAY_CONFIG: ${{ secrets.V2RAY_CONFIG }}
         run: |
-          echo "⬇️ 正在下载 V2ray-core..."
-          wget -q https://github.com/v2fly/v2ray-core/releases/latest/download/v2ray-linux-64.zip
-          unzip -q v2ray-linux-64.zip -d v2ray_bin
+          echo "⬇️ 正在下载 Xray-core..."
+          wget -q https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-64.zip
+          unzip -q Xray-linux-64.zip -d xray_bin
           
           echo "📝 正在写入节点配置..."
-          echo "$V2RAY_CONFIG" > v2ray_bin/config.json
+          echo "$V2RAY_CONFIG" > xray_bin/config.json
           
-          echo "🚀 正在后台启动 V2ray..."
-          nohup ./v2ray_bin/v2ray run -c ./v2ray_bin/config.json > v2ray.log 2>&1 &
+          echo "🚀 正在后台启动 Xray..."
+          # 必须进入 xray_bin 目录执行，确保它能读取到同目录下的 geosite.dat 和 geoip.dat
+          cd xray_bin
+          nohup ./xray run -c config.json > xray.log 2>&1 &
+          cd ..
           
-          echo "⏳ 等待 V2ray 核心启动 (5秒)..."
+          echo "⏳ 等待 Xray 核心启动 (5秒)..."
           sleep 5
           
-          echo "🌐 测试 V2ray 本地 HTTP 代理 (127.0.0.1:10808) 连通性..."
-          curl -x http://127.0.0.1:10808 -I -s https://www.google.com/generate_204 || echo "⚠️ 代理测试未通过，请检查节点配置！"
+          echo "🌐 测试 Xray 本地混合代理 (127.0.0.1:10808) 连通性..."
+          if curl -x http://127.0.0.1:10808 -I -s https://www.google.com/generate_204; then
+            echo "✅ 代理测试通过！Xray 已成功连通 Google。"
+          else
+            echo "⚠️ 代理测试未通过，网络未能连通！"
+            echo "==== 下面是 Xray 崩溃或报错的原始日志 ===="
+            cat xray_bin/xray.log
+            echo "=========================================="
+            exit 1 # 强制中断 Workflow，防止 Python 空跑
+          fi
 
       - name: Install Python Dependencies
         run: |
