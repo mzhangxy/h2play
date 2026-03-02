@@ -58,4 +58,29 @@ def login_host2play(email, password, proxy_url):
         if "Dashboard" in page.title or "Account" in page.title:
             print("🎉 奇迹出现！网站未强制要求验证码，直接登录成功。")
         else:
-            print("⚠️ 登录可能未成功，
+            print("⚠️ 登录可能未成功，请前往 Artifacts 查看 result_after_enter.png 截图，确认网站的拦截提示。")
+
+    except Exception as e:
+        print(f"\n💥 执行过程中出现异常: {e}")
+        if page:
+            try:
+                print("📸 正在捕获异常现场截图保存为 error_final.png...")
+                page.get_screenshot(path='.', name='error_final.png')
+            except Exception as screenshot_e:
+                print(f"截图保存失败: {screenshot_e}")
+    finally:
+        if page:
+            page.quit()
+        vdisplay.stop()
+        print("Xvfb 虚拟桌面已关闭。")
+
+if __name__ == "__main__":
+    email = os.getenv("USER_EMAIL")
+    password = os.getenv("USER_PASSWORD")
+    
+    if not email or not password:
+        print("❌ 未获取到账户变量，退出。")
+        sys.exit(1)
+        
+    # 确保使用的是 Xray 混合端口 10808
+    login_host2play(email, password, "http://127.0.0.1:10808")
