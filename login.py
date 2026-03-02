@@ -146,6 +146,8 @@ def login_host2play(email, password, proxy_url=None):
         co = ChromiumOptions()
         co.set_argument('--no-sandbox')
         co.set_argument('--disable-gpu')
+        co.set_argument('--disable-dev-shm-usage') # 新增：防止 Linux 容器下内存不足导致浏览器瞬间崩溃
+        co.set_argument('--window-size=1280,720')  # 新增：配合 Xvfb，强制指定窗口大小，提升渲染稳定性
         
         # --- 新增代理配置逻辑 ---
         if proxy_url:
