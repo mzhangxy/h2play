@@ -13,7 +13,7 @@ except ImportError:
     print("请确保已安装 SpeechRecognition 和 pydub 库")
 
 # ==============================================================================
-# 验证码求解器逻辑
+# 验证码求解器逻辑 (保持不变)
 # ==============================================================================
 class RecaptchaAudioSolver:
     """验证破解器 (自动刷新重试)"""
@@ -135,9 +135,9 @@ class RecaptchaAudioSolver:
         except: return None
 
 # ==============================================================================
-# 主登录逻辑
+# 主登录逻辑 (新增 proxy_url 参数)
 # ==============================================================================
-def login_host2play(email, password):
+def login_host2play(email, password, proxy_url=None):
     print("启动 Xvfb 虚拟桌面...")
     vdisplay = Xvfb(width=1280, height=720, colordepth=24)
     vdisplay.start()
@@ -146,6 +146,15 @@ def login_host2play(email, password):
         co = ChromiumOptions()
         co.set_argument('--no-sandbox')
         co.set_argument('--disable-gpu')
+        
+        # --- 新增代理配置逻辑 ---
+        if proxy_url:
+            print(f"🔄 检测到代理配置，正在设置代理...")
+            # 格式要求: http://ip:port 或 http://user:pass@ip:port
+            co.set_proxy(proxy_url)
+        else:
+            print("⚠️ 未配置代理，将使用本地/默认网络运行。")
+        # ------------------------
         
         page = ChromiumPage(co)
         
@@ -160,16 +169,11 @@ def login_host2play(email, password):
         page.ele('css:input[type="password"]').input(password)
         time.sleep(1)
         
-        # ... 上面填写邮箱密码的代码保持不变 ...
-        
         print("定位 reCAPTCHA 复选框...")
-        # 找 iframe 也稍微多给一点时间
         checkbox_iframe = page.get_frame('@src^https://www.google.com/recaptcha/api2/anchor', timeout=15)
         
         if checkbox_iframe:
             print("已定位到 iframe，等待内部元素加载 (GitHub环境可能较慢)...")
-            # 1. 延长超时时间到 15 秒
-            # 2. 改用 #recaptcha-anchor 这个更稳定、原生的 ID 定位器
             checkbox = checkbox_iframe.ele('#recaptcha-anchor', timeout=15)
             
             if not checkbox:
@@ -179,9 +183,8 @@ def login_host2play(email, password):
                 
             checkbox.click()
             print("点击了 reCAPTCHA 复选框，等待验证挑战弹出...")
-            time.sleep(4) # 多给一点点时间让网络请求飞一会儿
+            time.sleep(4)
             
-            # 同样改用更准确的属性判断
             if checkbox.attr('aria-checked') == 'true':
                 print("reCAPTCHA 直接验证通过！免去验证码挑战。")
             else:
@@ -202,10 +205,8 @@ def login_host2play(email, password):
             print("未找到 reCAPTCHA iframe，可能页面加载异常。正在截图...")
             page.get_screenshot(path='.', name='error_no_iframe.png')
 
-        # 3. 点击登录按钮
         time.sleep(2) 
         print("点击 Sign In 按钮...")
-        # 为了防止未加载完全，这里也加个等待
         sign_in_btn = page.ele('text:Sign In', timeout=10)
         if sign_in_btn:
             sign_in_btn.click()
@@ -225,14 +226,25 @@ def login_host2play(email, password):
         print("Xvfb 虚拟桌面已关闭。")
 
 if __name__ == "__main__":
-    # 从环境变量中获取 GitHub Secrets
     USER_EMAIL = os.getenv("USER_EMAIL")
     USER_PASSWORD = os.getenv("USER_PASSWORD")
+    PROXY_URL_ENV = os.getenv("PROXY_URL") # 获取原始的代理环境变量
     
-    # 增加校验，防止环境变量未配置导致代码空跑
     if not USER_EMAIL or not USER_PASSWORD:
         print("❌ 错误: 未能在环境变量中读取到 USER_EMAIL 或 USER_PASSWORD。")
-        print("请确保在 GitHub Repository -> Settings -> Secrets and variables 中配置了这两个变量，并在 workflow yaml 文件中正确映射了 env。")
         sys.exit(1)
         
-    login_host2play(USER_EMAIL, USER_PASSWORD)
+    # --- 新增：多代理解析与随机选择逻辑 ---
+    selected_proxy = None
+    if PROXY_URL_ENV:
+        # 将换行符替换为逗号，然后按逗号分割，并去除首尾空格
+        proxy_list = [p.strip() for p in PROXY_URL_ENV.replace('\n', ',').split(',') if p.strip()]
+        
+        if proxy_list:
+            # 使用 random.choice 从列表中随机挑选一个代理
+            selected_proxy = random.choice(proxy_list)
+            print(f"🎲 代理池中共检测到 {len(proxy_list)} 个代理，本次随机抽中的代理是: {selected_proxy}")
+    # ---------------------------------------
+            
+    # 将选中的单个代理传入主函数
+    login_host2play(USER_EMAIL, USER_PASSWORD, selected_proxy)
