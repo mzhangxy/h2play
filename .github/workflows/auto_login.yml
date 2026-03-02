@@ -1,53 +1,66 @@
 name: Auto Login Script
 
-# 配置触发条件
 on:
-  workflow_dispatch: # 允许在 GitHub Actions 页面手动点击运行
+  workflow_dispatch:
   schedule:
-    # 定时任务：每天的 UTC 时间 00:00 运行一次 (根据需要修改 cron 表达式)
     - cron: '0 0 * * *'
 
 jobs:
   run-login:
-    runs-on: ubuntu-latest # 使用 Ubuntu 环境，方便安装 xvfb 和 ffmpeg
+    runs-on: ubuntu-latest 
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        # 拉取仓库代码到当前运行环境
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10' # 推荐使用 3.10 或更高版本
+          python-version: '3.10' 
 
       - name: Install System Dependencies
         run: |
           sudo apt-get update
-          # 安装虚拟桌面 xvfb 和音频处理工具 ffmpeg
-          sudo apt-get install -y xvfb ffmpeg
+          sudo apt-get install -y xvfb ffmpeg unzip
+
+      # ==========================================
+      # 新增：下载并后台运行 V2ray 核心
+      # ==========================================
+      - name: Install and Run V2ray
+        env:
+          V2RAY_CONFIG: ${{ secrets.V2RAY_CONFIG }}
+        run: |
+          echo "⬇️ 正在下载 V2ray-core..."
+          wget -q https://github.com/v2fly/v2ray-core/releases/latest/download/v2ray-linux-64.zip
+          unzip -q v2ray-linux-64.zip -d v2ray_bin
+          
+          echo "📝 正在写入节点配置..."
+          echo "$V2RAY_CONFIG" > v2ray_bin/config.json
+          
+          echo "🚀 正在后台启动 V2ray..."
+          nohup ./v2ray_bin/v2ray run -c ./v2ray_bin/config.json > v2ray.log 2>&1 &
+          
+          echo "⏳ 等待 V2ray 核心启动 (5秒)..."
+          sleep 5
+          
+          echo "🌐 测试 V2ray 本地 HTTP 代理 (127.0.0.1:10809) 连通性..."
+          curl -x http://127.0.0.1:10809 -I -s https://www.google.com/generate_204 || echo "⚠️ 代理测试未通过，请检查节点配置！"
 
       - name: Install Python Dependencies
         run: |
           python -m pip install --upgrade pip
-          # 安装脚本所需的全部 Python 库
           pip install DrissionPage xvfbwrapper requests SpeechRecognition pydub
 
       - name: Run Login Script
         env:
           USER_EMAIL: ${{ secrets.USER_EMAIL }}
           USER_PASSWORD: ${{ secrets.USER_PASSWORD }}
-          # 映射代理 Secret 到环境变量
-          PROXY_URL: ${{ secrets.PROXY_URL }} 
-        run: python login.py
+        run: python login.py 
 
-      # ==========================================
-      # 新增步骤：收集并上传所有截图作为排错构件 (Artifact)
-      # ==========================================
       - name: Upload Error Screenshots
         uses: actions/upload-artifact@v4
-        if: always() # 极其重要：确保即使上一层的 run 步骤报错失败，此步骤依然会执行
+        if: always() 
         with:
-          name: debug-screenshots # 下载时的压缩包名称
-          path: ./*.png # 自动捕获当前目录下产生的所有 .png 结尾的文件
-          retention-days: 5 # 构件保留 5 天后自动清理，节省空间
+          name: debug-screenshots 
+          path: ./*.png 
+          retention-days: 5
