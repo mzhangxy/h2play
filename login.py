@@ -13,6 +13,30 @@ except ImportError:
     pass
 
 # ==============================================================================
+# 模拟人类行为辅助函数
+# ==============================================================================
+def human_type(element, text):
+    """模拟人类点击输入框并逐字输入文字"""
+    element.click()
+    time.sleep(random.uniform(0.1, 0.3))
+    element.clear()
+    
+    for char in text:
+        element.input(char, clear=False)
+        time.sleep(random.uniform(0.05, 0.2))
+    
+    time.sleep(random.uniform(0.3, 0.8))
+
+def human_move_and_click(page, element):
+    """模拟人类移动鼠标轨迹并点击"""
+    try:
+        page.actions.move_to(element, duration=random.uniform(0.5, 1.0))
+        time.sleep(random.uniform(0.1, 0.3))
+        element.click()
+    except:
+        element.click()
+
+# ==============================================================================
 # 语音验证码破解模块
 # ==============================================================================
 class RecaptchaAudioSolver:
@@ -124,11 +148,16 @@ def login_host2play(email, password, proxy_url):
             return 
 
         print("📝 成功定位输入框，开始填写并触发防御机制...")
-        email_input.input(email)
+        # 使用人类模拟输入邮箱
+        human_type(email_input, email)
         
         # 第一击：回车触发隐藏的验证码并等待页面刷新重建
         print("🔑 提交密码并敲击回车...")
-        page.ele('css:input[type="password"]').input(f"{password}\n")
+        pwd_input = page.ele('css:input[type="password"]')
+        # 使用人类模拟输入密码
+        human_type(pwd_input, password)
+        # 模拟敲击回车键
+        pwd_input.input('\n')
         
         print("⏳ 触发后台校验，等待 8 秒让页面刷新并加载验证码...")
         time.sleep(8)
@@ -140,7 +169,8 @@ def login_host2play(email, password, proxy_url):
         if checkbox_frame:
             checkbox = checkbox_frame.ele('#recaptcha-anchor', timeout=10)
             if checkbox:
-                checkbox.click()
+                # 使用人类模拟轨迹点击复选框
+                human_move_and_click(page, checkbox)
                 print("🖱️ 已点击复选框，等待响应...")
                 time.sleep(4)
                 
@@ -160,7 +190,8 @@ def login_host2play(email, password, proxy_url):
                 print("🚀 验证完成，最终点击 Sign In...")
                 sign_in_btn = page.ele('text:Sign In', timeout=10)
                 if sign_in_btn:
-                    sign_in_btn.click()
+                    # 使用人类模拟轨迹点击最终按钮
+                    human_move_and_click(page, sign_in_btn)
                     time.sleep(8)
                     print(f"📄 最终页面标题: {page.title}")
                     
