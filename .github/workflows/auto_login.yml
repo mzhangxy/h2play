@@ -35,11 +35,11 @@ jobs:
 
       - name: Run Login Script
         env:
-          # 将 GitHub Secrets 映射为环境变量
           USER_EMAIL: ${{ secrets.USER_EMAIL }}
           USER_PASSWORD: ${{ secrets.USER_PASSWORD }}
-        # 假设您的 Python 脚本命名为 login.py，请根据实际文件名修改
-        run: python login.py 
+          # 映射代理 Secret 到环境变量
+          PROXY_URL: ${{ secrets.PROXY_URL }} 
+        run: python login.py
 
       # ==========================================
       # 新增步骤：收集并上传所有截图作为排错构件 (Artifact)
