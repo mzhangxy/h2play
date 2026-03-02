@@ -213,22 +213,19 @@ def login_host2play(email, password, proxy_url=None):
             page.quit()
         vdisplay.stop()
         print("Xvfb 虚拟桌面已关闭。")
+        pass
 
 
 if __name__ == "__main__":
     USER_EMAIL = os.getenv("USER_EMAIL")
-    USER_PASSWORD = os.getenv("USER_PASSWORD")
-    PROXY_URL_ENV = os.getenv("PROXY_URL") 
+    USER_PASSWORD = os.getenv("USER_PASSWORD") 
     
     if not USER_EMAIL or not USER_PASSWORD:
         print("❌ 错误: 未能在环境变量中读取到 USER_EMAIL 或 USER_PASSWORD。")
         sys.exit(1)
-        
-    selected_proxy = None
-    if PROXY_URL_ENV:
-        proxy_list = [p.strip() for p in PROXY_URL_ENV.replace('\n', ',').split(',') if p.strip()]
-        if proxy_list:
-            selected_proxy = random.choice(proxy_list)
-            print(f"🎲 代理池中共检测到 {len(proxy_list)} 个代理，本次随机抽中的代理是: {selected_proxy}")
+    V2RAY_LOCAL_PROXY = "http://127.0.0.1:10809"
+    
+    print(f"⚡ 准备使用 V2ray 本地代理节点: {V2RAY_LOCAL_PROXY}")
             
-    login_host2play(USER_EMAIL, USER_PASSWORD, selected_proxy)
+    # 将 V2ray 本地代理传入登录函数
+    login_host2play(USER_EMAIL, USER_PASSWORD, V2RAY_LOCAL_PROXY)
